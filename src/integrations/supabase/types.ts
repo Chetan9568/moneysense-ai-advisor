@@ -14,7 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      file_uploads: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          file_size: number | null
+          file_type: string | null
+          filename: string
+          id: string
+          processed_transactions: number | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          filename: string
+          id?: string
+          processed_transactions?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          filename?: string
+          id?: string
+          processed_transactions?: number | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      forecasts: {
+        Row: {
+          confidence_interval_lower: number | null
+          confidence_interval_upper: number | null
+          created_at: string
+          forecast_date: string
+          forecast_type: string | null
+          id: string
+          model_used: string | null
+          predicted_amount: number
+          user_id: string
+        }
+        Insert: {
+          confidence_interval_lower?: number | null
+          confidence_interval_upper?: number | null
+          created_at?: string
+          forecast_date: string
+          forecast_type?: string | null
+          id?: string
+          model_used?: string | null
+          predicted_amount: number
+          user_id: string
+        }
+        Update: {
+          confidence_interval_lower?: number | null
+          confidence_interval_upper?: number | null
+          created_at?: string
+          forecast_date?: string
+          forecast_type?: string | null
+          id?: string
+          model_used?: string | null
+          predicted_amount?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account: string | null
+          amount: number
+          category: string | null
+          confidence_score: number | null
+          created_at: string
+          date: string
+          description: string
+          id: string
+          is_anomaly: boolean | null
+          transaction_type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account?: string | null
+          amount: number
+          category?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          date: string
+          description: string
+          id?: string
+          is_anomaly?: boolean | null
+          transaction_type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account?: string | null
+          amount?: number
+          category?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          is_anomaly?: boolean | null
+          transaction_type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
