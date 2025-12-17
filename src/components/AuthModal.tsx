@@ -82,7 +82,16 @@ const AuthModal = ({ open, onOpenChange }: AuthModalProps) => {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          setError("Please check your email and click the verification link before signing in.");
+        } else if (error.message.includes("Invalid login credentials")) {
+          setError("Invalid email or password. Please try again.");
+        } else {
+          setError(error.message);
+        }
+        return;
+      }
 
       toast({
         title: "Welcome back!",
