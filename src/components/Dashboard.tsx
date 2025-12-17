@@ -1,9 +1,53 @@
+import { useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, DollarSign, CreditCard, PiggyBank } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
-const Dashboard = () => {
+interface DashboardProps {
+  onFileUpload?: (file: File) => void;
+}
+
+const Dashboard = ({ onFileUpload }: DashboardProps) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upload your data",
+        variant: "destructive",
+      });
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a CSV or Excel file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (onFileUpload) {
+      onFileUpload(file);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
   // Mock data for demonstrations
   const expenseData = [
     { month: 'Jan', expenses: 2400, forecast: 2500, income: 4000 },
@@ -215,9 +259,16 @@ const Dashboard = () => {
             <p className="mb-6 opacity-90">
               Upload your bank statements or transaction CSV files to begin your AI-powered financial analysis
             </p>
-            <Button variant="secondary" size="lg" className="bg-white text-primary hover:bg-white/90">
+            <Button variant="secondary" size="lg" className="bg-white text-primary hover:bg-white/90" onClick={handleUploadClick}>
               Upload Your Data
             </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </CardContent>
         </Card>
       </div>
