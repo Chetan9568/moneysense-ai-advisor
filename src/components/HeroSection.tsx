@@ -1,8 +1,64 @@
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Upload, TrendingUp, Shield, Brain } from "lucide-react";
 import heroImage from "@/assets/hero-finance.jpg";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
-const HeroSection = () => {
+interface HeroSectionProps {
+  onFileUpload?: (file: File) => void;
+}
+
+const HeroSection = ({ onFileUpload }: HeroSectionProps) => {
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a CSV or Excel file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upload your data",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (onFileUpload) {
+      onFileUpload(file);
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upload your data",
+        variant: "destructive",
+      });
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-finance-background via-background to-finance-background/50">
       <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5"></div>
@@ -27,14 +83,21 @@ const HeroSection = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
-              <Button variant="hero" size="lg" className="group">
+              <Button variant="hero" size="lg" className="group" onClick={handleUploadClick}>
                 Start Free Analysis
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="outline" size="lg">
+              <Button variant="outline" size="lg" onClick={handleUploadClick}>
                 <Upload className="h-4 w-4" />
                 Upload CSV File
               </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-6 text-center">
