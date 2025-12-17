@@ -35,7 +35,7 @@ const Index = () => {
       <Header />
       <HeroSection onFileUpload={handleFileUpload} />
       <Features />
-      <Dashboard />
+      <Dashboard onFileUpload={handleFileUpload} />
       <Footer />
 
       <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
