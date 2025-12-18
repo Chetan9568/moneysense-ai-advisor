@@ -7,6 +7,158 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to retry OpenAI calls with exponential backoff
+async function callOpenAIWithRetry(openAIApiKey: string, body: object, maxRetries = 3): Promise<any> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    if (response.status === 429) {
+      // Rate limited - wait and retry
+      const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+      console.log(`Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      continue;
+    }
+
+    // For other errors, throw immediately
+    throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+  }
+  
+  // If all retries failed, return null to trigger fallback
+  console.log('All OpenAI retries failed, using fallback processing');
+  return null;
+}
+
+// Fallback column detection without AI
+function detectColumnsManually(headers: string[]): any {
+  const headerLower = headers.map(h => h.toLowerCase());
+  
+  let dateColumn = headers.find((_, i) => 
+    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate'].includes(headerLower[i])
+  );
+  
+  let descriptionColumn = headers.find((_, i) => 
+    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo'].includes(headerLower[i])
+  );
+  
+  let amountColumn = headers.find((_, i) => 
+    ['amount', 'amt', 'value', 'sum', 'debit', 'credit'].includes(headerLower[i])
+  );
+
+  let accountColumn = headers.find((_, i) => 
+    ['account', 'acct', 'account_name'].includes(headerLower[i])
+  );
+
+  // If not found by exact match, try partial match
+  if (!dateColumn) {
+    dateColumn = headers.find((_, i) => headerLower[i].includes('date')) || headers[0];
+  }
+  if (!descriptionColumn) {
+    descriptionColumn = headers.find((_, i) => 
+      headerLower[i].includes('name') || headerLower[i].includes('desc')
+    ) || headers[1];
+  }
+  if (!amountColumn) {
+    amountColumn = headers.find((_, i) => 
+      headerLower[i].includes('amount') || headerLower[i].includes('balance')
+    ) || headers[2];
+  }
+
+  return {
+    column_mapping: {
+      date_column: dateColumn,
+      description_column: descriptionColumn,
+      amount_column: amountColumn,
+      account_column: accountColumn || null
+    }
+  };
+}
+
+// Categorize transaction based on description
+function categorizeTransaction(description: string): string {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes('salary') || desc.includes('payroll') || desc.includes('direct deposit') || desc.includes('income')) {
+    return 'Income';
+  }
+  if (desc.includes('grocery') || desc.includes('food') || desc.includes('restaurant') || 
+      desc.includes('cafe') || desc.includes('coffee') || desc.includes('pizza') ||
+      desc.includes('swiggy') || desc.includes('zomato') || desc.includes('uber eats')) {
+    return 'Food & Dining';
+  }
+  if (desc.includes('gas') || desc.includes('fuel') || desc.includes('petrol') || 
+      desc.includes('uber') || desc.includes('ola') || desc.includes('lyft') ||
+      desc.includes('transport') || desc.includes('metro') || desc.includes('bus')) {
+    return 'Transportation';
+  }
+  if (desc.includes('shop') || desc.includes('store') || desc.includes('amazon') ||
+      desc.includes('flipkart') || desc.includes('walmart') || desc.includes('target') ||
+      desc.includes('mall') || desc.includes('retail')) {
+    return 'Shopping';
+  }
+  if (desc.includes('bill') || desc.includes('utility') || desc.includes('electric') ||
+      desc.includes('water') || desc.includes('internet') || desc.includes('phone') ||
+      desc.includes('mobile') || desc.includes('recharge')) {
+    return 'Bills & Utilities';
+  }
+  if (desc.includes('health') || desc.includes('medical') || desc.includes('pharmacy') ||
+      desc.includes('hospital') || desc.includes('doctor') || desc.includes('clinic')) {
+    return 'Healthcare';
+  }
+  if (desc.includes('rent') || desc.includes('mortgage') || desc.includes('lease')) {
+    return 'Housing';
+  }
+  if (desc.includes('movie') || desc.includes('netflix') || desc.includes('spotify') ||
+      desc.includes('entertainment') || desc.includes('game') || desc.includes('subscription')) {
+    return 'Entertainment';
+  }
+  if (desc.includes('transfer') || desc.includes('upi') || desc.includes('neft') ||
+      desc.includes('imps') || desc.includes('payment')) {
+    return 'Transfer';
+  }
+  if (desc.includes('atm') || desc.includes('withdrawal') || desc.includes('cash')) {
+    return 'Cash Withdrawal';
+  }
+  
+  return 'Other';
+}
+
+// Detect if transaction is income or expense
+function detectTransactionType(description: string, amount: string, drcrColumn?: string): string {
+  const desc = description.toLowerCase();
+  
+  // Check DR/CR column if available
+  if (drcrColumn) {
+    const drcr = drcrColumn.toLowerCase().trim();
+    if (drcr === 'cr' || drcr === 'credit' || drcr === 'c') return 'income';
+    if (drcr === 'dr' || drcr === 'debit' || drcr === 'd') return 'expense';
+  }
+  
+  // Check for income indicators
+  if (desc.includes('salary') || desc.includes('deposit') || desc.includes('credit') ||
+      desc.includes('refund') || desc.includes('cashback') || desc.includes('received') ||
+      desc.includes('income') || desc.includes('bonus') || desc.includes('interest earned')) {
+    return 'income';
+  }
+  
+  // Check amount sign
+  if (amount.includes('+')) return 'income';
+  if (amount.includes('-')) return 'expense';
+  
+  return 'expense';
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -55,31 +207,25 @@ serve(async (req) => {
 
     // Parse CSV data
     const lines = csv_data.trim().split('\n');
-    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/['"]/g, ''));
     
     console.log(`CSV headers detected: ${headers.join(', ')}`);
 
-    // Use OpenAI to intelligently categorize and clean the transaction data
+    // Try AI-based column detection with fallback
+    let processingConfig: any;
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
-    const sampleRows = lines.slice(1, Math.min(6, lines.length)).join('\n');
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    if (openAIApiKey) {
+      const sampleRows = lines.slice(1, Math.min(6, lines.length)).join('\n');
+      
+      const aiResult = await callOpenAIWithRetry(openAIApiKey, {
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
             content: `You are a financial data processing AI. Analyze CSV transaction data and:
             1. Map column headers to standard fields (date, description, amount, category, account)
-            2. Categorize transactions into appropriate categories
-            3. Detect transaction types (income/expense)
-            4. Clean and standardize the data
+            2. Detect transaction types (income/expense)
             
             Return ONLY a JSON object with this structure:
             {
@@ -87,15 +233,8 @@ serve(async (req) => {
                 "date_column": "column_name",
                 "description_column": "column_name", 
                 "amount_column": "column_name",
-                "account_column": "column_name_or_null"
-              },
-              "category_mapping": {
-                "description_pattern": "category_name"
-              },
-              "processing_instructions": {
-                "date_format": "MM/DD/YYYY or YYYY-MM-DD etc",
-                "amount_format": "positive_negative or always_positive",
-                "notes": "any special processing notes"
+                "account_column": "column_name_or_null",
+                "drcr_column": "column_name_or_null"
               }
             }`
           },
@@ -108,87 +247,97 @@ serve(async (req) => {
             Sample rows:
             ${sampleRows}
             
-            Map the columns and suggest categorization patterns.`
+            Map the columns appropriately.`
           }
         ],
         temperature: 0.2,
-        max_tokens: 1500,
-      }),
-    });
+        max_tokens: 500,
+      });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      if (aiResult && aiResult.choices?.[0]?.message?.content) {
+        try {
+          processingConfig = JSON.parse(aiResult.choices[0].message.content);
+          console.log('Using AI-based column detection');
+        } catch (parseError) {
+          console.log('Failed to parse AI response, using fallback');
+          processingConfig = detectColumnsManually(headers);
+        }
+      } else {
+        console.log('AI unavailable, using fallback column detection');
+        processingConfig = detectColumnsManually(headers);
+      }
+    } else {
+      console.log('No OpenAI key, using fallback column detection');
+      processingConfig = detectColumnsManually(headers);
     }
 
-    const aiResult = await response.json();
-    const processingConfig = JSON.parse(aiResult.choices[0].message.content);
+    console.log('Processing configuration:', JSON.stringify(processingConfig));
 
-    console.log('Processing configuration:', processingConfig);
-
-    // Process transactions based on AI analysis
-    const transactions = [];
-    const errors = [];
+    // Process transactions
+    const transactions: any[] = [];
+    const errors: string[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       try {
         const values = lines[i].split(',').map((v: string) => v.trim().replace(/['"]/g, ''));
         
-        if (values.length < headers.length) continue; // Skip incomplete rows
+        if (values.length < 2) continue; // Skip empty/incomplete rows
 
         const rowData: any = {};
-        headers.forEach((header, index) => {
-          rowData[header] = values[index];
+        headers.forEach((header: string, index: number) => {
+          rowData[header] = values[index] || '';
         });
 
-        // Extract fields using AI mapping
-        const dateField = rowData[processingConfig.column_mapping.date_column];
-        const descriptionField = rowData[processingConfig.column_mapping.description_column];
-        const amountField = rowData[processingConfig.column_mapping.amount_column];
+        // Extract fields using mapping
+        const dateField = rowData[processingConfig.column_mapping.date_column] || '';
+        const descriptionField = rowData[processingConfig.column_mapping.description_column] || '';
+        const amountField = rowData[processingConfig.column_mapping.amount_column] || '';
         const accountField = rowData[processingConfig.column_mapping.account_column] || 'Primary Account';
+        const drcrField = rowData[processingConfig.column_mapping.drcr_column];
+
+        // Skip if essential fields are missing
+        if (!dateField || !amountField) continue;
 
         // Parse date
-        let transactionDate;
+        let transactionDate: string;
         try {
-          transactionDate = new Date(dateField).toISOString().split('T')[0];
+          const parsedDate = new Date(dateField);
+          if (isNaN(parsedDate.getTime())) {
+            // Try different date formats
+            const parts = dateField.split(/[\/\-\.]/);
+            if (parts.length === 3) {
+              // Assume DD/MM/YYYY or MM/DD/YYYY
+              const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+              transactionDate = `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            } else {
+              transactionDate = new Date().toISOString().split('T')[0];
+            }
+          } else {
+            transactionDate = parsedDate.toISOString().split('T')[0];
+          }
         } catch {
           transactionDate = new Date().toISOString().split('T')[0];
         }
 
         // Parse amount
-        const amount = Math.abs(parseFloat(amountField.replace(/[$,]/g, '')));
-        if (isNaN(amount)) continue;
+        const cleanAmount = amountField.replace(/[$,₹€£\s]/g, '');
+        const amount = Math.abs(parseFloat(cleanAmount));
+        if (isNaN(amount) || amount === 0) continue;
 
-        // Determine transaction type and categorize
-        const isIncome = amountField.includes('+') || 
-                        descriptionField.toLowerCase().includes('deposit') ||
-                        descriptionField.toLowerCase().includes('salary') ||
-                        descriptionField.toLowerCase().includes('income');
-
-        // Simple categorization (can be enhanced with AI)
-        let category = 'Other';
-        const desc = descriptionField.toLowerCase();
-        if (desc.includes('grocery') || desc.includes('food') || desc.includes('restaurant')) {
-          category = 'Food & Dining';
-        } else if (desc.includes('gas') || desc.includes('fuel') || desc.includes('transport')) {
-          category = 'Transportation';
-        } else if (desc.includes('shop') || desc.includes('store') || desc.includes('amazon')) {
-          category = 'Shopping';
-        } else if (desc.includes('bill') || desc.includes('utility') || desc.includes('electric')) {
-          category = 'Bills & Utilities';
-        } else if (desc.includes('health') || desc.includes('medical') || desc.includes('pharmacy')) {
-          category = 'Healthcare';
-        } else if (isIncome) {
-          category = 'Income';
-        }
+        // Determine transaction type
+        const transactionType = detectTransactionType(descriptionField, amountField, drcrField);
+        
+        // Categorize
+        const category = categorizeTransaction(descriptionField);
 
         transactions.push({
           user_id: user.id,
           date: transactionDate,
-          description: descriptionField,
+          description: descriptionField || 'Transaction',
           category: category,
           amount: amount,
           account: accountField,
-          transaction_type: isIncome ? 'income' : 'expense'
+          transaction_type: transactionType
         });
 
       } catch (error) {
@@ -238,7 +387,7 @@ serve(async (req) => {
       success: true,
       processed_transactions: insertedCount,
       total_rows: lines.length - 1,
-      errors: errors.slice(0, 10), // Return first 10 errors
+      errors: errors.slice(0, 10),
       duplicate_count: transactions.length - uniqueTransactions.length,
       file_upload_id: fileUpload.id,
       categories_detected: [...new Set(uniqueTransactions.map(t => t.category))]
