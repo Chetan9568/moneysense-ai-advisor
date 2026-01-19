@@ -40,23 +40,57 @@ const AuthModal = ({ open, onOpenChange }: AuthModalProps) => {
     setError("");
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: fullName,
           },
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("already registered")) {
+          setError("This email is already registered. Please sign in instead.");
+        } else {
+          throw error;
+        }
+        return;
+      }
 
-      toast({
-        title: "Account created!",
-        description: "Please check your email to verify your account.",
-      });
+      // Check if user was created and auto-sign in
+      if (data.user && !data.session) {
+        // If no session returned, try to sign in immediately
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          // If sign in fails due to email confirmation, show friendly message
+          if (signInError.message.includes("Email not confirmed")) {
+            toast({
+              title: "Account created!",
+              description: "Please check your email to verify your account, or ask your admin to disable email confirmation.",
+            });
+          } else {
+            throw signInError;
+          }
+        } else {
+          toast({
+            title: "Welcome to MoneyMind!",
+            description: "Your account has been created and you're now signed in.",
+          });
+        }
+      } else if (data.session) {
+        // Session returned directly (email confirmation disabled)
+        toast({
+          title: "Welcome to MoneyMind!",
+          description: "Your account has been created and you're now signed in.",
+        });
+      }
+
       resetForm();
       onOpenChange(false);
     } catch (error: any) {
