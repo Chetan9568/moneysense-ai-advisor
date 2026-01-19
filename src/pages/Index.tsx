@@ -4,25 +4,22 @@ import HeroSection from "@/components/HeroSection";
 import Features from "@/components/Features";
 import Dashboard from "@/components/Dashboard";
 import Footer from "@/components/Footer";
-import FileUpload from "@/components/FileUpload";
+import FileUpload, { ParsedTransaction } from "@/components/FileUpload";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [transactions, setTransactions] = useState<ParsedTransaction[]>([]);
   const { toast } = useToast();
 
-  const handleFileUpload = (file: File) => {
-    setSelectedFile(file);
+  const handleFileUpload = () => {
     setUploadModalOpen(true);
   };
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = (parsedTransactions: ParsedTransaction[]) => {
+    setTransactions(parsedTransactions);
     setUploadModalOpen(false);
-    setSelectedFile(null);
-    setRefreshKey(prev => prev + 1);
     toast({
       title: "Upload complete",
       description: "Your transactions have been processed successfully!",
@@ -34,7 +31,7 @@ const Index = () => {
       <Header />
       <HeroSection onFileUpload={handleFileUpload} />
       <Features />
-      <Dashboard key={refreshKey} onFileUpload={handleFileUpload} />
+      <Dashboard transactions={transactions} onFileUpload={handleFileUpload} />
       <Footer />
 
       <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>

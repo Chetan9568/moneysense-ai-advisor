@@ -4,11 +4,109 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Upload, FileText, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface FileUploadProps {
-  onUploadComplete?: () => void;
+  onUploadComplete?: (transactions: ParsedTransaction[]) => void;
+}
+
+export interface ParsedTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category: string;
+  transaction_type: 'income' | 'expense';
+}
+
+// Categorize transaction based on description
+function categorizeTransaction(description: string): string {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes('salary') || desc.includes('payroll') || desc.includes('direct deposit') || desc.includes('income')) {
+    return 'Income';
+  }
+  if (desc.includes('grocery') || desc.includes('food') || desc.includes('restaurant') || 
+      desc.includes('cafe') || desc.includes('coffee') || desc.includes('pizza') ||
+      desc.includes('swiggy') || desc.includes('zomato') || desc.includes('uber eats')) {
+    return 'Food & Dining';
+  }
+  if (desc.includes('gas') || desc.includes('fuel') || desc.includes('petrol') || 
+      desc.includes('uber') || desc.includes('ola') || desc.includes('lyft') ||
+      desc.includes('transport') || desc.includes('metro') || desc.includes('bus')) {
+    return 'Transportation';
+  }
+  if (desc.includes('shop') || desc.includes('store') || desc.includes('amazon') ||
+      desc.includes('flipkart') || desc.includes('walmart') || desc.includes('target') ||
+      desc.includes('mall') || desc.includes('retail')) {
+    return 'Shopping';
+  }
+  if (desc.includes('bill') || desc.includes('utility') || desc.includes('electric') ||
+      desc.includes('water') || desc.includes('internet') || desc.includes('phone') ||
+      desc.includes('mobile') || desc.includes('recharge')) {
+    return 'Bills & Utilities';
+  }
+  if (desc.includes('health') || desc.includes('medical') || desc.includes('pharmacy') ||
+      desc.includes('hospital') || desc.includes('doctor') || desc.includes('clinic')) {
+    return 'Healthcare';
+  }
+  if (desc.includes('rent') || desc.includes('mortgage') || desc.includes('lease')) {
+    return 'Housing';
+  }
+  if (desc.includes('movie') || desc.includes('netflix') || desc.includes('spotify') ||
+      desc.includes('entertainment') || desc.includes('game') || desc.includes('subscription')) {
+    return 'Entertainment';
+  }
+  if (desc.includes('transfer') || desc.includes('upi') || desc.includes('neft') ||
+      desc.includes('imps') || desc.includes('payment')) {
+    return 'Transfer';
+  }
+  if (desc.includes('atm') || desc.includes('withdrawal') || desc.includes('cash')) {
+    return 'Cash Withdrawal';
+  }
+  
+  return 'Other';
+}
+
+// Detect if transaction is income or expense
+function detectTransactionType(description: string, amount: string): 'income' | 'expense' {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes('salary') || desc.includes('deposit') || desc.includes('credit') ||
+      desc.includes('refund') || desc.includes('cashback') || desc.includes('received') ||
+      desc.includes('income') || desc.includes('bonus') || desc.includes('interest earned')) {
+    return 'income';
+  }
+  
+  if (amount.includes('+')) return 'income';
+  if (amount.includes('-')) return 'expense';
+  
+  return 'expense';
+}
+
+// Detect columns from headers
+function detectColumns(headers: string[]): { date: number; description: number; amount: number } {
+  const headerLower = headers.map(h => h.toLowerCase());
+  
+  let dateIdx = headerLower.findIndex(h => 
+    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate'].includes(h)
+  );
+  if (dateIdx === -1) dateIdx = headerLower.findIndex(h => h.includes('date'));
+  if (dateIdx === -1) dateIdx = 0;
+  
+  let descIdx = headerLower.findIndex(h => 
+    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo'].includes(h)
+  );
+  if (descIdx === -1) descIdx = headerLower.findIndex(h => h.includes('desc') || h.includes('name'));
+  if (descIdx === -1) descIdx = 1;
+  
+  let amountIdx = headerLower.findIndex(h => 
+    ['amount', 'amt', 'value', 'sum', 'debit', 'credit'].includes(h)
+  );
+  if (amountIdx === -1) amountIdx = headerLower.findIndex(h => h.includes('amount'));
+  if (amountIdx === -1) amountIdx = 2;
+  
+  return { date: dateIdx, description: descIdx, amount: amountIdx };
 }
 
 const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
@@ -35,55 +133,107 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
     setResult(null);
 
     try {
-      // Read file content
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
           const content = e.target?.result as string;
-          
           setProgress(25);
 
-          // Get current session
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error("Please log in to upload transactions");
-          }
-
+          // Parse CSV locally
+          const lines = content.trim().split('\n');
+          const headers = lines[0].split(',').map(h => h.trim().replace(/['"]/g, ''));
+          
           setProgress(50);
 
-          // Call the process-transactions edge function
-          const { data, error } = await supabase.functions.invoke('process-transactions', {
-            body: {
-              csv_data: content,
-              filename: file.name
-            },
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          });
+          const columnMapping = detectColumns(headers);
+          const transactions: ParsedTransaction[] = [];
+          const errors: string[] = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            try {
+              const values = lines[i].split(',').map(v => v.trim().replace(/['"]/g, ''));
+              if (values.length < 3) continue;
+
+              const dateField = values[columnMapping.date] || '';
+              const descriptionField = values[columnMapping.description] || '';
+              const amountField = values[columnMapping.amount] || '';
+
+              if (!dateField || !amountField) continue;
+
+              // Parse date
+              let transactionDate: string;
+              try {
+                const parsedDate = new Date(dateField);
+                if (isNaN(parsedDate.getTime())) {
+                  const parts = dateField.split(/[\/\-\.]/);
+                  if (parts.length === 3) {
+                    const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+                    transactionDate = `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                  } else {
+                    transactionDate = new Date().toISOString().split('T')[0];
+                  }
+                } else {
+                  transactionDate = parsedDate.toISOString().split('T')[0];
+                }
+              } catch {
+                transactionDate = new Date().toISOString().split('T')[0];
+              }
+
+              // Parse amount
+              const cleanAmount = amountField.replace(/[$,₹€£\s]/g, '');
+              const amount = Math.abs(parseFloat(cleanAmount));
+              if (isNaN(amount) || amount === 0) continue;
+
+              const transactionType = detectTransactionType(descriptionField, amountField);
+              const category = categorizeTransaction(descriptionField);
+
+              transactions.push({
+                id: `local-${i}-${Date.now()}`,
+                date: transactionDate,
+                description: descriptionField || 'Transaction',
+                amount,
+                category,
+                transaction_type: transactionType
+              });
+            } catch (err: any) {
+              errors.push(`Row ${i + 1}: ${err.message}`);
+            }
+          }
 
           setProgress(75);
 
-          if (error) {
-            throw new Error(error.message || 'Failed to process transactions');
-          }
+          // Remove duplicates
+          const uniqueTransactions = transactions.filter((t, idx, self) =>
+            idx === self.findIndex(x => 
+              x.date === t.date && x.amount === t.amount && x.description === t.description
+            )
+          );
 
           setProgress(100);
-          setResult(data);
 
-          toast({
-            title: "Upload successful!",
-            description: `Processed ${data.processed_transactions} transactions successfully.`,
+          const categories = [...new Set(uniqueTransactions.map(t => t.category))];
+          
+          setResult({
+            processed_transactions: uniqueTransactions.length,
+            total_rows: lines.length - 1,
+            duplicate_count: transactions.length - uniqueTransactions.length,
+            categories_detected: categories,
+            errors: errors.slice(0, 10)
           });
 
-          onUploadComplete?.();
-
-        } catch (error: any) {
-          console.error('Processing error:', error);
-          setError(error.message);
           toast({
-            title: "Upload failed",
-            description: error.message,
+            title: "File processed successfully!",
+            description: `Parsed ${uniqueTransactions.length} transactions.`,
+          });
+
+          onUploadComplete?.(uniqueTransactions);
+
+        } catch (err: any) {
+          console.error('Processing error:', err);
+          setError(err.message);
+          toast({
+            title: "Processing failed",
+            description: err.message,
             variant: "destructive",
           });
         } finally {
@@ -101,8 +251,8 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
 
       reader.readAsText(file);
 
-    } catch (error: any) {
-      setError(error.message);
+    } catch (err: any) {
+      setError(err.message);
       setUploading(false);
     }
   };
@@ -115,7 +265,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           Upload Transactions
         </CardTitle>
         <CardDescription>
-          Upload your bank statement CSV or Excel file to get started with AI-powered financial insights
+          Upload your bank statement CSV file to get started with AI-powered financial insights
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -171,7 +321,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
               <div className="space-y-2">
-                <p className="font-semibold">Upload completed successfully!</p>
+                <p className="font-semibold">Processing completed successfully!</p>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium">Processed:</span> {result.processed_transactions} transactions
@@ -193,8 +343,8 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                       Some rows had issues:
                     </p>
                     <ul className="text-xs text-yellow-700 ml-4 mt-1">
-                      {result.errors.slice(0, 3).map((error: string, index: number) => (
-                        <li key={index}>• {error}</li>
+                      {result.errors.slice(0, 3).map((err: string, index: number) => (
+                        <li key={index}>• {err}</li>
                       ))}
                       {result.errors.length > 3 && (
                         <li>• ... and {result.errors.length - 3} more</li>
@@ -211,7 +361,6 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           <p><strong>Expected CSV format:</strong></p>
           <p>• Date, Description/Merchant, Amount (with + for income, - for expenses)</p>
           <p>• Headers like: Date, Description, Amount, Account, Category (optional)</p>
-          <p><strong>Note:</strong> Your data is processed securely and stored with encryption.</p>
         </div>
       </CardContent>
     </Card>
