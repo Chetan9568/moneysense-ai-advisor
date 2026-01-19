@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, DollarSign, CreditCard, PiggyBank, RefreshCw, Loader2 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -49,7 +48,6 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const Dashboard = ({ onFileUpload }: DashboardProps) => {
-  const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -59,12 +57,8 @@ const Dashboard = ({ onFileUpload }: DashboardProps) => {
 
   // Fetch transactions on mount
   useEffect(() => {
-    if (user) {
-      fetchTransactions();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+    fetchTransactions();
+  }, []);
 
   const fetchTransactions = async () => {
     try {
@@ -89,8 +83,6 @@ const Dashboard = ({ onFileUpload }: DashboardProps) => {
   };
 
   const runAnomalyDetection = async () => {
-    if (!user) return;
-    
     try {
       setDetecting(true);
       const { data: { session } } = await supabase.auth.getSession();
@@ -202,14 +194,6 @@ const Dashboard = ({ onFileUpload }: DashboardProps) => {
     }));
 
   const handleUploadClick = () => {
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to upload your data",
-        variant: "destructive",
-      });
-      return;
-    }
     fileInputRef.current?.click();
   };
 

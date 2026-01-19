@@ -5,13 +5,10 @@ import Features from "@/components/Features";
 import Dashboard from "@/components/Dashboard";
 import Footer from "@/components/Footer";
 import FileUpload from "@/components/FileUpload";
-import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const { user } = useAuth();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -25,7 +22,7 @@ const Index = () => {
   const handleUploadComplete = () => {
     setUploadModalOpen(false);
     setSelectedFile(null);
-    setRefreshKey(prev => prev + 1); // Force dashboard refresh
+    setRefreshKey(prev => prev + 1);
     toast({
       title: "Upload complete",
       description: "Your transactions have been processed successfully!",
