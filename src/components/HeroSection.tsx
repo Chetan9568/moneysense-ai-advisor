@@ -2,16 +2,13 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Upload, TrendingUp, Shield, Brain } from "lucide-react";
 import heroImage from "@/assets/hero-finance.jpg";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 
 interface HeroSectionProps {
   onFileUpload?: (file: File) => void;
 }
 
 const HeroSection = ({ onFileUpload }: HeroSectionProps) => {
-  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -28,15 +25,6 @@ const HeroSection = ({ onFileUpload }: HeroSectionProps) => {
       return;
     }
 
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to upload your data",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (onFileUpload) {
       onFileUpload(file);
     }
@@ -48,14 +36,6 @@ const HeroSection = ({ onFileUpload }: HeroSectionProps) => {
   };
 
   const handleUploadClick = () => {
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to upload your data",
-        variant: "destructive",
-      });
-      return;
-    }
     fileInputRef.current?.click();
   };
 
