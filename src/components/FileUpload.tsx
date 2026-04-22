@@ -225,9 +225,12 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                 const n = parseNum(raw);
                 signedAmount = (isParenNeg || isMinus) ? -Math.abs(n) : n;
                 if (typeField) {
-                  if (typeField.startsWith('dr') || typeField.includes('debit') || typeField.includes('withdraw')) {
+                  const tf = typeField.trim();
+                  if (tf === 'db' || tf === 'dr' || tf.startsWith('db') || tf.startsWith('dr') ||
+                      tf.includes('debit') || tf.includes('withdraw')) {
                     signedAmount = -Math.abs(n);
-                  } else if (typeField.startsWith('cr') || typeField.includes('credit') || typeField.includes('deposit')) {
+                  } else if (tf === 'cr' || tf.startsWith('cr') ||
+                             tf.includes('credit') || tf.includes('deposit')) {
                     signedAmount = Math.abs(n);
                   }
                 }
