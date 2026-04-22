@@ -64,6 +64,17 @@ function categorizeTransaction(description: string): string {
   if (desc.includes('atm') || desc.includes('withdrawal') || desc.includes('cash')) {
     return 'Cash Withdrawal';
   }
+  if (desc.includes('neft') || desc.includes('imps') || desc.includes('rtgs') ||
+      desc.includes('upi') || desc.includes('ecs') || desc.includes('transfer')) {
+    return 'Transfer';
+  }
+  if (desc.includes('sbint') || desc.includes('interest')) {
+    return 'Interest';
+  }
+  if (desc.includes('stock chrg') || desc.includes('charge') || desc.includes('fee') ||
+      desc.includes('debit card annual')) {
+    return 'Bank Charges';
+  }
   
   return 'Other';
 }
@@ -168,6 +179,8 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           setProgress(50);
 
           const columnMapping = detectColumns(headers);
+          const headerLower = headers.map(h => h.toLowerCase().trim());
+          const modeIdx = headerLower.findIndex(h => h === 'mode' || h === 'channel' || h === 'method');
           const transactions: ParsedTransaction[] = [];
           const errors: string[] = [];
 
@@ -177,7 +190,9 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
               if (values.length < 3) continue;
 
               const dateField = values[columnMapping.date] || '';
-              const descriptionField = values[columnMapping.description] || '';
+              const nameField = values[columnMapping.description] || '';
+              const modeField = modeIdx >= 0 ? (values[modeIdx] || '') : '';
+              const descriptionField = [modeField, nameField].filter(Boolean).join(' ').trim() || 'Transaction';
               const amountField = columnMapping.amount >= 0 ? (values[columnMapping.amount] || '') : '';
               const debitField = columnMapping.debit >= 0 ? (values[columnMapping.debit] || '') : '';
               const creditField = columnMapping.credit >= 0 ? (values[columnMapping.credit] || '') : '';
@@ -225,9 +240,12 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                 const n = parseNum(raw);
                 signedAmount = (isParenNeg || isMinus) ? -Math.abs(n) : n;
                 if (typeField) {
-                  if (typeField.startsWith('dr') || typeField.includes('debit') || typeField.includes('withdraw')) {
+                  const tf = typeField.trim();
+                  if (tf === 'db' || tf === 'dr' || tf.startsWith('db') || tf.startsWith('dr') ||
+                      tf.includes('debit') || tf.includes('withdraw')) {
                     signedAmount = -Math.abs(n);
-                  } else if (typeField.startsWith('cr') || typeField.includes('credit') || typeField.includes('deposit')) {
+                  } else if (tf === 'cr' || tf.startsWith('cr') ||
+                             tf.includes('credit') || tf.includes('deposit')) {
                     signedAmount = Math.abs(n);
                   }
                 }
