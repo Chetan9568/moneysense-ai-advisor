@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, DollarSign, CreditCard, PiggyBank } from "lucide-react";
+import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, IndianRupee, CreditCard, PiggyBank } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ParsedTransaction } from "@/components/FileUpload";
 
@@ -40,6 +40,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const formatINR = (n: number) =>
+    new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const formatINRShort = (n: number) =>
+    new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
 
   // Calculate metrics from transactions
   const totalIncome = transactions
