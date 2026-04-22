@@ -64,6 +64,17 @@ function categorizeTransaction(description: string): string {
   if (desc.includes('atm') || desc.includes('withdrawal') || desc.includes('cash')) {
     return 'Cash Withdrawal';
   }
+  if (desc.includes('neft') || desc.includes('imps') || desc.includes('rtgs') ||
+      desc.includes('upi') || desc.includes('ecs') || desc.includes('transfer')) {
+    return 'Transfer';
+  }
+  if (desc.includes('sbint') || desc.includes('interest')) {
+    return 'Interest';
+  }
+  if (desc.includes('stock chrg') || desc.includes('charge') || desc.includes('fee') ||
+      desc.includes('debit card annual')) {
+    return 'Bank Charges';
+  }
   
   return 'Other';
 }
