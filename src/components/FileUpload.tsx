@@ -17,6 +17,7 @@ export interface ParsedTransaction {
   amount: number;
   category: string;
   transaction_type: 'income' | 'expense';
+  runningBalance?: number;
 }
 
 // Categorize transaction based on description
