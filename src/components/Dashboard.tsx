@@ -224,7 +224,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
-                      <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                      <Tooltip formatter={(value: number) => `₹${formatINRShort(value)}`} />
                       <Bar dataKey="income" name="Income" fill="#22c55e" />
                       <Bar dataKey="expenses" name="Expenses" fill="#ef4444" />
                     </BarChart>
@@ -266,7 +266,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                        <Tooltip formatter={(value: number) => `₹${formatINRShort(value)}`} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 w-full lg:w-auto">
@@ -274,7 +274,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                         <div key={i} className="flex items-center gap-2 text-sm">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
                           <span className="truncate max-w-[120px]">{cat.name}</span>
-                          <span className="text-muted-foreground ml-auto">${cat.value.toLocaleString()}</span>
+                          <span className="text-muted-foreground ml-auto">₹{formatINRShort(cat.value)}</span>
                         </div>
                       ))}
                     </div>
