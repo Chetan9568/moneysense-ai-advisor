@@ -178,9 +178,13 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
 
               const dateField = values[columnMapping.date] || '';
               const descriptionField = values[columnMapping.description] || '';
-              const amountField = values[columnMapping.amount] || '';
+              const amountField = columnMapping.amount >= 0 ? (values[columnMapping.amount] || '') : '';
+              const debitField = columnMapping.debit >= 0 ? (values[columnMapping.debit] || '') : '';
+              const creditField = columnMapping.credit >= 0 ? (values[columnMapping.credit] || '') : '';
+              const typeField = columnMapping.type >= 0 ? (values[columnMapping.type] || '').toLowerCase() : '';
 
-              if (!dateField || !amountField) continue;
+              if (!dateField) continue;
+              if (!amountField && !debitField && !creditField) continue;
 
               // Parse date
               let transactionDate: string;
@@ -201,13 +205,39 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                 transactionDate = new Date().toISOString().split('T')[0];
               }
 
-              // Parse amount
-              const cleanAmount = amountField.replace(/[$,₹€£\s]/g, '');
-              const amount = Math.abs(parseFloat(cleanAmount));
-              if (isNaN(amount) || amount === 0) continue;
+              // Parse amount — supports separate Debit/Credit columns, signed Amount, or Type indicator
+              const parseNum = (s: string) => {
+                const cleaned = s.replace(/[$,₹€£\s'"]/g, '').replace(/[()]/g, '');
+                const n = parseFloat(cleaned);
+                return isNaN(n) ? 0 : n;
+              };
 
-              const transactionType = detectTransactionType(descriptionField, amountField);
-              const category = categorizeTransaction(descriptionField);
+              let signedAmount = 0;
+              const debitVal = parseNum(debitField);
+              const creditVal = parseNum(creditField);
+
+              if (debitVal > 0 || creditVal > 0) {
+                signedAmount = creditVal > 0 ? creditVal : -debitVal;
+              } else if (amountField) {
+                const raw = amountField.trim();
+                const isParenNeg = /^\(.*\)$/.test(raw);
+                const isMinus = raw.includes('-');
+                const n = parseNum(raw);
+                signedAmount = (isParenNeg || isMinus) ? -Math.abs(n) : n;
+                if (typeField) {
+                  if (typeField.startsWith('dr') || typeField.includes('debit') || typeField.includes('withdraw')) {
+                    signedAmount = -Math.abs(n);
+                  } else if (typeField.startsWith('cr') || typeField.includes('credit') || typeField.includes('deposit')) {
+                    signedAmount = Math.abs(n);
+                  }
+                }
+              }
+
+              const amount = Math.abs(signedAmount);
+              if (amount === 0) continue;
+
+              const transactionType = detectTransactionType(descriptionField, signedAmount);
+              const category = transactionType === 'income' ? 'Income' : categorizeTransaction(descriptionField);
 
               transactions.push({
                 id: `local-${i}-${Date.now()}`,
