@@ -68,45 +68,67 @@ function categorizeTransaction(description: string): string {
   return 'Other';
 }
 
-// Detect if transaction is income or expense
-function detectTransactionType(description: string, amount: string): 'income' | 'expense' {
+// Detect if transaction is income or expense from a signed numeric amount
+function detectTransactionType(description: string, signedAmount: number): 'income' | 'expense' {
   const desc = description.toLowerCase();
-  
-  if (desc.includes('salary') || desc.includes('deposit') || desc.includes('credit') ||
-      desc.includes('refund') || desc.includes('cashback') || desc.includes('received') ||
-      desc.includes('income') || desc.includes('bonus') || desc.includes('interest earned')) {
+
+  if (desc.includes('salary') || desc.includes('payroll') || desc.includes('refund') ||
+      desc.includes('cashback') || desc.includes('bonus') || desc.includes('interest earned') ||
+      desc.includes('received from') || desc.includes('credited')) {
     return 'income';
   }
-  
-  if (amount.includes('+')) return 'income';
-  if (amount.includes('-')) return 'expense';
-  
-  return 'expense';
+  if (desc.includes('paid to') || desc.includes('debited') || desc.includes('purchase') ||
+      desc.includes('withdrawal') || desc.includes('atm')) {
+    return 'expense';
+  }
+
+  return signedAmount >= 0 ? 'income' : 'expense';
 }
 
 // Detect columns from headers
-function detectColumns(headers: string[]): { date: number; description: number; amount: number } {
-  const headerLower = headers.map(h => h.toLowerCase());
-  
-  let dateIdx = headerLower.findIndex(h => 
-    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate'].includes(h)
+function detectColumns(headers: string[]): {
+  date: number;
+  description: number;
+  amount: number;
+  debit: number;
+  credit: number;
+  type: number;
+} {
+  const headerLower = headers.map(h => h.toLowerCase().trim());
+
+  let dateIdx = headerLower.findIndex(h =>
+    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate', 'txn date', 'value date'].includes(h)
   );
   if (dateIdx === -1) dateIdx = headerLower.findIndex(h => h.includes('date'));
   if (dateIdx === -1) dateIdx = 0;
-  
-  let descIdx = headerLower.findIndex(h => 
-    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo'].includes(h)
+
+  let descIdx = headerLower.findIndex(h =>
+    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo', 'narration', 'particulars', 'remarks'].includes(h)
   );
-  if (descIdx === -1) descIdx = headerLower.findIndex(h => h.includes('desc') || h.includes('name'));
+  if (descIdx === -1) descIdx = headerLower.findIndex(h => h.includes('desc') || h.includes('narr') || h.includes('particular') || h.includes('detail'));
   if (descIdx === -1) descIdx = 1;
-  
-  let amountIdx = headerLower.findIndex(h => 
-    ['amount', 'amt', 'value', 'sum', 'debit', 'credit'].includes(h)
+
+  const debitIdx = headerLower.findIndex(h =>
+    ['debit', 'withdrawal', 'withdrawal amt', 'withdrawal amount', 'dr', 'debit amount', 'paid out'].includes(h) ||
+    h.includes('withdrawal') || h.includes('debit')
   );
-  if (amountIdx === -1) amountIdx = headerLower.findIndex(h => h.includes('amount'));
-  if (amountIdx === -1) amountIdx = 2;
-  
-  return { date: dateIdx, description: descIdx, amount: amountIdx };
+  const creditIdx = headerLower.findIndex(h =>
+    ['credit', 'deposit', 'deposit amt', 'deposit amount', 'cr', 'credit amount', 'paid in'].includes(h) ||
+    h.includes('deposit') || h.includes('credit')
+  );
+
+  let amountIdx = headerLower.findIndex(h =>
+    ['amount', 'amt', 'value', 'sum', 'transaction amount', 'txn amount'].includes(h)
+  );
+  if (amountIdx === -1) amountIdx = headerLower.findIndex(h => h.includes('amount') || h.includes('amt'));
+  if (amountIdx === -1 && debitIdx === -1 && creditIdx === -1) amountIdx = 2;
+
+  const typeIdx = headerLower.findIndex(h =>
+    ['type', 'txn type', 'transaction type', 'dr/cr', 'cr/dr', 'drcr'].includes(h) ||
+    h.includes('dr/cr') || h.includes('cr/dr')
+  );
+
+  return { date: dateIdx, description: descIdx, amount: amountIdx, debit: debitIdx, credit: creditIdx, type: typeIdx };
 }
 
 const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
