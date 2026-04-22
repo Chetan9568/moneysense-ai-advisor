@@ -55,7 +55,14 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
     .filter(t => t.transaction_type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const balance = totalIncome - totalExpenses;
+  // Prefer the actual account balance from the bank statement (last row's running balance).
+  // Fall back to income − expenses only if the file doesn't include a balance column.
+  const sortedByDate = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+  const lastWithBalance = [...sortedByDate].reverse().find(t => typeof t.runningBalance === 'number');
+  const accountBalance = lastWithBalance?.runningBalance;
+  const netCashFlow = totalIncome - totalExpenses;
+  const balance = typeof accountBalance === 'number' ? accountBalance : netCashFlow;
+  const usingAccountBalance = typeof accountBalance === 'number';
 
   // Get current month expenses
   const currentMonth = new Date().getMonth();
@@ -139,7 +146,9 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Net Balance</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {usingAccountBalance ? 'Account Balance' : 'Net Cash Flow'}
+                  </p>
                   <p className={`text-2xl font-bold ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
                     ₹{hasData ? formatINR(Math.abs(balance)) : '0.00'}
                   </p>
@@ -148,7 +157,11 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
               </div>
               <div className={`flex items-center mt-4 text-xs ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {balance >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                {hasData ? (balance >= 0 ? 'Positive balance' : 'Negative balance') : 'No data yet'}
+                {hasData
+                  ? (usingAccountBalance
+                      ? `Net cash flow: ₹${formatINR(Math.abs(netCashFlow))} ${netCashFlow >= 0 ? 'in' : 'out'}`
+                      : (balance >= 0 ? 'Positive cash flow' : 'Negative cash flow'))
+                  : 'No data yet'}
               </div>
             </CardContent>
           </Card>
