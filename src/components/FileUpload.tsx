@@ -168,6 +168,8 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           setProgress(50);
 
           const columnMapping = detectColumns(headers);
+          const headerLower = headers.map(h => h.toLowerCase().trim());
+          const modeIdx = headerLower.findIndex(h => h === 'mode' || h === 'channel' || h === 'method');
           const transactions: ParsedTransaction[] = [];
           const errors: string[] = [];
 
@@ -177,7 +179,9 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
               if (values.length < 3) continue;
 
               const dateField = values[columnMapping.date] || '';
-              const descriptionField = values[columnMapping.description] || '';
+              const nameField = values[columnMapping.description] || '';
+              const modeField = modeIdx >= 0 ? (values[modeIdx] || '') : '';
+              const descriptionField = [modeField, nameField].filter(Boolean).join(' ').trim() || 'Transaction';
               const amountField = columnMapping.amount >= 0 ? (values[columnMapping.amount] || '') : '';
               const debitField = columnMapping.debit >= 0 ? (values[columnMapping.debit] || '') : '';
               const creditField = columnMapping.credit >= 0 ? (values[columnMapping.credit] || '') : '';
