@@ -182,6 +182,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
           const columnMapping = detectColumns(headers);
           const headerLower = headers.map(h => h.toLowerCase().trim());
           const modeIdx = headerLower.findIndex(h => h === 'mode' || h === 'channel' || h === 'method');
+          const balanceIdx = headerLower.findIndex(h => h === 'balance' || h === 'running balance' || h === 'closing balance' || h === 'available balance');
           const transactions: ParsedTransaction[] = [];
           const errors: string[] = [];
 
@@ -198,6 +199,7 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
               const debitField = columnMapping.debit >= 0 ? (values[columnMapping.debit] || '') : '';
               const creditField = columnMapping.credit >= 0 ? (values[columnMapping.credit] || '') : '';
               const typeField = columnMapping.type >= 0 ? (values[columnMapping.type] || '').toLowerCase() : '';
+              const balanceField = balanceIdx >= 0 ? (values[balanceIdx] || '') : '';
 
               if (!dateField) continue;
               if (!amountField && !debitField && !creditField) continue;
@@ -264,7 +266,8 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                 description: descriptionField || 'Transaction',
                 amount,
                 category,
-                transaction_type: transactionType
+                transaction_type: transactionType,
+                runningBalance: balanceField ? parseNum(balanceField) : undefined,
               });
             } catch (err: any) {
               errors.push(`Row ${i + 1}: ${err.message}`);
