@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, DollarSign, CreditCard, PiggyBank } from "lucide-react";
+import { TrendingUp, TrendingDown, Upload, AlertTriangle, Brain, IndianRupee, CreditCard, PiggyBank } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ParsedTransaction } from "@/components/FileUpload";
 
@@ -40,6 +40,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const formatINR = (n: number) =>
+    new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const formatINRShort = (n: number) =>
+    new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
 
   // Calculate metrics from transactions
   const totalIncome = transactions
@@ -136,10 +141,10 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Net Balance</p>
                   <p className={`text-2xl font-bold ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    ${hasData ? Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(Math.abs(balance)) : '0.00'}
                   </p>
                 </div>
-                <DollarSign className={`h-8 w-8 ${balance >= 0 ? 'text-success' : 'text-destructive'}`} />
+                <IndianRupee className={`h-8 w-8 ${balance >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
               <div className={`flex items-center mt-4 text-xs ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {balance >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
@@ -154,13 +159,13 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
                   <p className="text-2xl font-bold text-destructive">
-                    ${hasData ? totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(totalExpenses) : '0.00'}
                   </p>
                 </div>
                 <CreditCard className="h-8 w-8 text-destructive" />
               </div>
               <div className="flex items-center mt-4 text-xs text-muted-foreground">
-                This month: ${monthlyExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                This month: ₹{formatINR(monthlyExpenses)}
               </div>
             </CardContent>
           </Card>
@@ -171,7 +176,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Income</p>
                   <p className="text-2xl font-bold text-success">
-                    ${hasData ? totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(totalIncome) : '0.00'}
                   </p>
                 </div>
                 <PiggyBank className="h-8 w-8 text-success" />
@@ -219,7 +224,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis />
-                      <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                      <Tooltip formatter={(value: number) => `₹${formatINRShort(value)}`} />
                       <Bar dataKey="income" name="Income" fill="#22c55e" />
                       <Bar dataKey="expenses" name="Expenses" fill="#ef4444" />
                     </BarChart>
@@ -261,7 +266,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                        <Tooltip formatter={(value: number) => `₹${formatINRShort(value)}`} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 w-full lg:w-auto">
@@ -269,7 +274,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                         <div key={i} className="flex items-center gap-2 text-sm">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
                           <span className="truncate max-w-[120px]">{cat.name}</span>
-                          <span className="text-muted-foreground ml-auto">${cat.value.toLocaleString()}</span>
+                          <span className="text-muted-foreground ml-auto">₹{formatINRShort(cat.value)}</span>
                         </div>
                       ))}
                     </div>

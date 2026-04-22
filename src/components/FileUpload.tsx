@@ -68,45 +68,67 @@ function categorizeTransaction(description: string): string {
   return 'Other';
 }
 
-// Detect if transaction is income or expense
-function detectTransactionType(description: string, amount: string): 'income' | 'expense' {
+// Detect if transaction is income or expense from a signed numeric amount
+function detectTransactionType(description: string, signedAmount: number): 'income' | 'expense' {
   const desc = description.toLowerCase();
-  
-  if (desc.includes('salary') || desc.includes('deposit') || desc.includes('credit') ||
-      desc.includes('refund') || desc.includes('cashback') || desc.includes('received') ||
-      desc.includes('income') || desc.includes('bonus') || desc.includes('interest earned')) {
+
+  if (desc.includes('salary') || desc.includes('payroll') || desc.includes('refund') ||
+      desc.includes('cashback') || desc.includes('bonus') || desc.includes('interest earned') ||
+      desc.includes('received from') || desc.includes('credited')) {
     return 'income';
   }
-  
-  if (amount.includes('+')) return 'income';
-  if (amount.includes('-')) return 'expense';
-  
-  return 'expense';
+  if (desc.includes('paid to') || desc.includes('debited') || desc.includes('purchase') ||
+      desc.includes('withdrawal') || desc.includes('atm')) {
+    return 'expense';
+  }
+
+  return signedAmount >= 0 ? 'income' : 'expense';
 }
 
 // Detect columns from headers
-function detectColumns(headers: string[]): { date: number; description: number; amount: number } {
-  const headerLower = headers.map(h => h.toLowerCase());
-  
-  let dateIdx = headerLower.findIndex(h => 
-    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate'].includes(h)
+function detectColumns(headers: string[]): {
+  date: number;
+  description: number;
+  amount: number;
+  debit: number;
+  credit: number;
+  type: number;
+} {
+  const headerLower = headers.map(h => h.toLowerCase().trim());
+
+  let dateIdx = headerLower.findIndex(h =>
+    ['date', 'transaction_date', 'trans_date', 'posted_date', 'tdate', 'txn date', 'value date'].includes(h)
   );
   if (dateIdx === -1) dateIdx = headerLower.findIndex(h => h.includes('date'));
   if (dateIdx === -1) dateIdx = 0;
-  
-  let descIdx = headerLower.findIndex(h => 
-    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo'].includes(h)
+
+  let descIdx = headerLower.findIndex(h =>
+    ['description', 'desc', 'name', 'merchant', 'transaction', 'details', 'memo', 'narration', 'particulars', 'remarks'].includes(h)
   );
-  if (descIdx === -1) descIdx = headerLower.findIndex(h => h.includes('desc') || h.includes('name'));
+  if (descIdx === -1) descIdx = headerLower.findIndex(h => h.includes('desc') || h.includes('narr') || h.includes('particular') || h.includes('detail'));
   if (descIdx === -1) descIdx = 1;
-  
-  let amountIdx = headerLower.findIndex(h => 
-    ['amount', 'amt', 'value', 'sum', 'debit', 'credit'].includes(h)
+
+  const debitIdx = headerLower.findIndex(h =>
+    ['debit', 'withdrawal', 'withdrawal amt', 'withdrawal amount', 'dr', 'debit amount', 'paid out'].includes(h) ||
+    h.includes('withdrawal') || h.includes('debit')
   );
-  if (amountIdx === -1) amountIdx = headerLower.findIndex(h => h.includes('amount'));
-  if (amountIdx === -1) amountIdx = 2;
-  
-  return { date: dateIdx, description: descIdx, amount: amountIdx };
+  const creditIdx = headerLower.findIndex(h =>
+    ['credit', 'deposit', 'deposit amt', 'deposit amount', 'cr', 'credit amount', 'paid in'].includes(h) ||
+    h.includes('deposit') || h.includes('credit')
+  );
+
+  let amountIdx = headerLower.findIndex(h =>
+    ['amount', 'amt', 'value', 'sum', 'transaction amount', 'txn amount'].includes(h)
+  );
+  if (amountIdx === -1) amountIdx = headerLower.findIndex(h => h.includes('amount') || h.includes('amt'));
+  if (amountIdx === -1 && debitIdx === -1 && creditIdx === -1) amountIdx = 2;
+
+  const typeIdx = headerLower.findIndex(h =>
+    ['type', 'txn type', 'transaction type', 'dr/cr', 'cr/dr', 'drcr'].includes(h) ||
+    h.includes('dr/cr') || h.includes('cr/dr')
+  );
+
+  return { date: dateIdx, description: descIdx, amount: amountIdx, debit: debitIdx, credit: creditIdx, type: typeIdx };
 }
 
 const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
@@ -156,9 +178,13 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
 
               const dateField = values[columnMapping.date] || '';
               const descriptionField = values[columnMapping.description] || '';
-              const amountField = values[columnMapping.amount] || '';
+              const amountField = columnMapping.amount >= 0 ? (values[columnMapping.amount] || '') : '';
+              const debitField = columnMapping.debit >= 0 ? (values[columnMapping.debit] || '') : '';
+              const creditField = columnMapping.credit >= 0 ? (values[columnMapping.credit] || '') : '';
+              const typeField = columnMapping.type >= 0 ? (values[columnMapping.type] || '').toLowerCase() : '';
 
-              if (!dateField || !amountField) continue;
+              if (!dateField) continue;
+              if (!amountField && !debitField && !creditField) continue;
 
               // Parse date
               let transactionDate: string;
@@ -179,13 +205,39 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                 transactionDate = new Date().toISOString().split('T')[0];
               }
 
-              // Parse amount
-              const cleanAmount = amountField.replace(/[$,₹€£\s]/g, '');
-              const amount = Math.abs(parseFloat(cleanAmount));
-              if (isNaN(amount) || amount === 0) continue;
+              // Parse amount — supports separate Debit/Credit columns, signed Amount, or Type indicator
+              const parseNum = (s: string) => {
+                const cleaned = s.replace(/[$,₹€£\s'"]/g, '').replace(/[()]/g, '');
+                const n = parseFloat(cleaned);
+                return isNaN(n) ? 0 : n;
+              };
 
-              const transactionType = detectTransactionType(descriptionField, amountField);
-              const category = categorizeTransaction(descriptionField);
+              let signedAmount = 0;
+              const debitVal = parseNum(debitField);
+              const creditVal = parseNum(creditField);
+
+              if (debitVal > 0 || creditVal > 0) {
+                signedAmount = creditVal > 0 ? creditVal : -debitVal;
+              } else if (amountField) {
+                const raw = amountField.trim();
+                const isParenNeg = /^\(.*\)$/.test(raw);
+                const isMinus = raw.includes('-');
+                const n = parseNum(raw);
+                signedAmount = (isParenNeg || isMinus) ? -Math.abs(n) : n;
+                if (typeField) {
+                  if (typeField.startsWith('dr') || typeField.includes('debit') || typeField.includes('withdraw')) {
+                    signedAmount = -Math.abs(n);
+                  } else if (typeField.startsWith('cr') || typeField.includes('credit') || typeField.includes('deposit')) {
+                    signedAmount = Math.abs(n);
+                  }
+                }
+              }
+
+              const amount = Math.abs(signedAmount);
+              if (amount === 0) continue;
+
+              const transactionType = detectTransactionType(descriptionField, signedAmount);
+              const category = transactionType === 'income' ? 'Income' : categorizeTransaction(descriptionField);
 
               transactions.push({
                 id: `local-${i}-${Date.now()}`,
