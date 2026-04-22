@@ -141,10 +141,10 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Net Balance</p>
                   <p className={`text-2xl font-bold ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    ${hasData ? Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(Math.abs(balance)) : '0.00'}
                   </p>
                 </div>
-                <DollarSign className={`h-8 w-8 ${balance >= 0 ? 'text-success' : 'text-destructive'}`} />
+                <IndianRupee className={`h-8 w-8 ${balance >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
               <div className={`flex items-center mt-4 text-xs ${balance >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {balance >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
@@ -159,13 +159,13 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
                   <p className="text-2xl font-bold text-destructive">
-                    ${hasData ? totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(totalExpenses) : '0.00'}
                   </p>
                 </div>
                 <CreditCard className="h-8 w-8 text-destructive" />
               </div>
               <div className="flex items-center mt-4 text-xs text-muted-foreground">
-                This month: ${monthlyExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                This month: ₹{formatINR(monthlyExpenses)}
               </div>
             </CardContent>
           </Card>
@@ -176,7 +176,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Income</p>
                   <p className="text-2xl font-bold text-success">
-                    ${hasData ? totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                    ₹{hasData ? formatINR(totalIncome) : '0.00'}
                   </p>
                 </div>
                 <PiggyBank className="h-8 w-8 text-success" />
