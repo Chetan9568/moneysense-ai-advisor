@@ -88,11 +88,10 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
     })
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Category breakdown — align with the "Total Expenses" card above,
-  // which displays the sum of transactions tagged as 'income' after the Db/Cr swap.
+  // Category breakdown — show all expense categories from the records.
   const categoryTotals: Record<string, number> = {};
   transactions
-    .filter(t => t.transaction_type === 'income')
+    .filter(t => t.transaction_type === 'expense')
     .forEach(t => {
       const cat = t.category || 'Other';
       categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
