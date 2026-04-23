@@ -184,12 +184,12 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
-                  <p className="text-2xl font-bold text-destructive">
+                  <p className="text-sm font-medium text-muted-foreground">Total Income</p>
+                  <p className="text-2xl font-bold text-success">
                     ₹{hasData ? formatINR(totalExpenses) : '0.00'}
                   </p>
                 </div>
-                <CreditCard className="h-8 w-8 text-destructive" />
+                <CreditCard className="h-8 w-8 text-success" />
               </div>
               <div className="flex items-center mt-4 text-xs text-muted-foreground">
                 This month: ₹{formatINR(monthlyExpenses)}
@@ -201,14 +201,14 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Income</p>
-                  <p className="text-2xl font-bold text-success">
+                  <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
+                  <p className="text-2xl font-bold text-destructive">
                     ₹{hasData ? formatINR(totalIncome) : '0.00'}
                   </p>
                 </div>
-                <PiggyBank className="h-8 w-8 text-success" />
+                <PiggyBank className="h-8 w-8 text-destructive" />
               </div>
-              <div className="flex items-center mt-4 text-xs text-success">
+              <div className="flex items-center mt-4 text-xs text-destructive">
                 <TrendingUp className="h-3 w-3 mr-1" />
                 {hasData ? `${transactions.filter(t => t.transaction_type === 'income').length} income transactions` : 'No income data'}
               </div>
