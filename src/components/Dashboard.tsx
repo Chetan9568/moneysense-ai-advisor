@@ -58,9 +58,23 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
   // Prefer the actual account balance from the bank statement (last row's running balance).
   // Fall back to income − expenses only if the file doesn't include a balance column.
   const sortedByDate = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
-  const lastWithBalance = [...sortedByDate].reverse().find(t => typeof t.runningBalance === 'number');
-  const accountBalance = lastWithBalance?.runningBalance;
+  // Because we swapped Db→Income / Cr→Expense, the CSV's running balance column
+  // (which uses the bank's original convention) is no longer aligned with our totals.
+  // Derive the account balance from the opening balance + our net cash flow instead.
+  const firstWithBalance = sortedByDate.find(t => typeof t.runningBalance === 'number');
   const netCashFlow = totalIncome - totalExpenses;
+  // Opening balance ≈ first row's running balance, "undoing" that first row's effect
+  // under the bank's original convention (income added, expense subtracted there too).
+  let openingBalance: number | undefined;
+  if (firstWithBalance && typeof firstWithBalance.runningBalance === 'number') {
+    const delta = firstWithBalance.transaction_type === 'income'
+      ? firstWithBalance.amount
+      : -firstWithBalance.amount;
+    openingBalance = firstWithBalance.runningBalance - delta;
+  }
+  const accountBalance = typeof openingBalance === 'number'
+    ? openingBalance + netCashFlow
+    : undefined;
   const balance = typeof accountBalance === 'number' ? accountBalance : netCashFlow;
   const usingAccountBalance = typeof accountBalance === 'number';
 
