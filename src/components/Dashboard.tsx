@@ -58,23 +58,9 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
   // Prefer the actual account balance from the bank statement (last row's running balance).
   // Fall back to income − expenses only if the file doesn't include a balance column.
   const sortedByDate = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
-  // Because we swapped Db→Income / Cr→Expense, the CSV's running balance column
-  // (which uses the bank's original convention) is no longer aligned with our totals.
-  // Derive the account balance from the opening balance + our net cash flow instead.
-  const firstWithBalance = sortedByDate.find(t => typeof t.runningBalance === 'number');
+  const lastWithBalance = [...sortedByDate].reverse().find(t => typeof t.runningBalance === 'number');
+  const accountBalance = lastWithBalance?.runningBalance;
   const netCashFlow = totalIncome - totalExpenses;
-  // Opening balance ≈ first row's running balance, "undoing" that first row's effect
-  // under the bank's original convention (income added, expense subtracted there too).
-  let openingBalance: number | undefined;
-  if (firstWithBalance && typeof firstWithBalance.runningBalance === 'number') {
-    const delta = firstWithBalance.transaction_type === 'income'
-      ? firstWithBalance.amount
-      : -firstWithBalance.amount;
-    openingBalance = firstWithBalance.runningBalance - delta;
-  }
-  const accountBalance = typeof openingBalance === 'number'
-    ? openingBalance + netCashFlow
-    : undefined;
   const balance = typeof accountBalance === 'number' ? accountBalance : netCashFlow;
   const usingAccountBalance = typeof accountBalance === 'number';
 
@@ -88,7 +74,7 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
     })
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Category breakdown — show all expense categories from the records.
+  // Category breakdown
   const categoryTotals: Record<string, number> = {};
   transactions
     .filter(t => t.transaction_type === 'expense')
@@ -184,12 +170,12 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Income</p>
-                  <p className="text-2xl font-bold text-success">
+                  <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
+                  <p className="text-2xl font-bold text-destructive">
                     ₹{hasData ? formatINR(totalExpenses) : '0.00'}
                   </p>
                 </div>
-                <CreditCard className="h-8 w-8 text-success" />
+                <CreditCard className="h-8 w-8 text-destructive" />
               </div>
               <div className="flex items-center mt-4 text-xs text-muted-foreground">
                 This month: ₹{formatINR(monthlyExpenses)}
@@ -201,14 +187,14 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Expenses</p>
-                  <p className="text-2xl font-bold text-destructive">
+                  <p className="text-sm font-medium text-muted-foreground">Total Income</p>
+                  <p className="text-2xl font-bold text-success">
                     ₹{hasData ? formatINR(totalIncome) : '0.00'}
                   </p>
                 </div>
-                <PiggyBank className="h-8 w-8 text-destructive" />
+                <PiggyBank className="h-8 w-8 text-success" />
               </div>
-              <div className="flex items-center mt-4 text-xs text-destructive">
+              <div className="flex items-center mt-4 text-xs text-success">
                 <TrendingUp className="h-3 w-3 mr-1" />
                 {hasData ? `${transactions.filter(t => t.transaction_type === 'income').length} income transactions` : 'No income data'}
               </div>

@@ -246,12 +246,10 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
                   const tf = typeField.trim();
                   if (tf === 'db' || tf === 'dr' || tf.startsWith('db') || tf.startsWith('dr') ||
                       tf.includes('debit') || tf.includes('withdraw')) {
-                    // Treat Db rows as income (per user's file convention)
-                    signedAmount = Math.abs(n);
+                    signedAmount = -Math.abs(n);
                   } else if (tf === 'cr' || tf.startsWith('cr') ||
                              tf.includes('credit') || tf.includes('deposit')) {
-                    // Treat Cr rows as expense (per user's file convention)
-                    signedAmount = -Math.abs(n);
+                    signedAmount = Math.abs(n);
                   }
                 }
               }
