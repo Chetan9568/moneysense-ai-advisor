@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Brain, IndianRupee, Target } from "lucide-react";
 import { ParsedTransaction } from "@/components/FileUpload";
+import { detectAnomalies } from "@/components/AnomalySection";
 
 interface Props {
   transactions: ParsedTransaction[];
@@ -79,6 +80,17 @@ const ForecastSection = ({ transactions }: Props) => {
   const [horizon, setHorizon] = useState<Horizon>(3);
 
   const monthly = useMemo(() => aggregateMonthly(transactions), [transactions]);
+
+  const anomalyMonths = useMemo(() => {
+    const set = new Set<string>();
+    detectAnomalies(transactions).forEach((a) => {
+      const d = new Date(a.txn.date);
+      if (!isNaN(d.getTime())) {
+        set.add(`${shortMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)}`);
+      }
+    });
+    return set;
+  }, [transactions]);
 
   const hasEnoughData = monthly.length >= 2;
 
@@ -313,7 +325,23 @@ const ForecastSection = ({ transactions }: Props) => {
                     <Legend />
                     <Area type="monotone" dataKey="upper" stroke="none" fill="url(#confBand)" name="Confidence Upper" />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="#ffffff" name="Confidence Lower" />
-                    <Line type="monotone" dataKey="actualExpense" stroke="#ef4444" strokeWidth={2} name="Actual Expense" dot={{ r: 3 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="actualExpense"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      name="Actual Expense"
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        if (cx == null || cy == null) return <g key={`dot-${index}`} />;
+                        const isAnom = anomalyMonths.has(payload.month);
+                        return isAnom ? (
+                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={6} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+                        ) : (
+                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={3} fill="#ef4444" />
+                        );
+                      }}
+                    />
                     <Line type="monotone" dataKey="actualIncome" stroke="#22c55e" strokeWidth={2} name="Actual Income" dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="forecastExpense" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 4" name="Forecast Expense" dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="forecastIncome" stroke="#22c55e" strokeWidth={2} strokeDasharray="6 4" name="Forecast Income" dot={{ r: 3 }} />

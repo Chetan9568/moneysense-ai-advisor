@@ -4,6 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import Features from "@/components/Features";
 import Dashboard from "@/components/Dashboard";
 import ForecastSection from "@/components/ForecastSection";
+import AnomalySection from "@/components/AnomalySection";
 import Footer from "@/components/Footer";
 import FileUpload, { ParsedTransaction } from "@/components/FileUpload";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ const Index = () => {
       <Features />
       <Dashboard transactions={transactions} onFileUpload={handleFileUpload} />
       <ForecastSection transactions={transactions} />
+      <AnomalySection transactions={transactions} />
       <Footer />
 
       <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
