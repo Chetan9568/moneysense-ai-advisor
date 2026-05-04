@@ -362,7 +362,9 @@ const ForecastSection = ({ transactions }: Props) => {
                   <TrendingUp className="h-5 w-5 text-primary" />
                   Expense Forecast — Next {horizon} {horizon === 1 ? "Month" : "Months"}
                 </CardTitle>
-                <CardDescription>Solid line = actual, dashed = predicted. Shaded band = 95% confidence interval.</CardDescription>
+                <CardDescription>
+                  LSTM neural network forecast · Solid line = actual, dashed = predicted · Shaded band = 95% confidence interval
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={340}>
