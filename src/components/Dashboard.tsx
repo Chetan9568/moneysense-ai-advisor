@@ -302,24 +302,6 @@ const Dashboard = ({ transactions = [], onFileUpload }: DashboardProps) => {
           </div>
         )}
 
-        {/* Upload Section */}
-        <Card className="bg-gradient-primary text-white border-0 shadow-elevated">
-          <CardContent className="p-8 text-center">
-            <Upload className="h-12 w-12 mx-auto mb-4 opacity-90" />
-            <h3 className="text-2xl font-bold mb-2">
-              {hasData ? "Upload More Data" : "Ready to Get Started?"}
-            </h3>
-            <p className="mb-6 opacity-90">
-              {hasData 
-                ? "Add more transaction files to enrich your analysis"
-                : "Upload your bank statements or transaction CSV files to begin your AI-powered financial analysis"
-              }
-            </p>
-            <Button variant="secondary" size="lg" className="bg-white text-primary hover:bg-white/90" onClick={handleUploadClick}>
-              Upload Your Data
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </section>
   );
