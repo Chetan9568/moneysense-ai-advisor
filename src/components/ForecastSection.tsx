@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  Area, AreaChart, BarChart, Bar,
+  Area, ComposedChart, BarChart, Bar,
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Brain, IndianRupee, Target } from "lucide-react";
 import { ParsedTransaction } from "@/components/FileUpload";
@@ -311,41 +311,89 @@ const ForecastSection = ({ transactions }: Props) => {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={340}>
-                  <AreaChart data={chartData}>
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="confBand" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(v) => `₹${formatINR(v)}`} />
-                    <Tooltip formatter={(v: any) => (v == null ? "-" : `₹${formatINR(v)}`)} />
-                    <Legend />
-                    <Area type="monotone" dataKey="upper" stroke="none" fill="url(#confBand)" name="Confidence Upper" />
-                    <Area type="monotone" dataKey="lower" stroke="none" fill="#ffffff" name="Confidence Lower" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickFormatter={(v) => `₹${formatINR(v)}`}
+                      width={80}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      labelStyle={{ fontWeight: 600, color: "hsl(var(--foreground))" }}
+                      formatter={(v: any, name: any) => (v == null ? ["-", name] : [`₹${formatINR(v)}`, name])}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    {/* Light confidence band */}
+                    <Area type="monotone" dataKey="upper" stroke="none" fill="url(#confBand)" name="Confidence" legendType="none" activeDot={false} />
+                    <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" name="Confidence Lower" legendType="none" activeDot={false} />
+                    {/* Solid lines = actual */}
                     <Line
                       type="monotone"
                       dataKey="actualExpense"
-                      stroke="#ef4444"
-                      strokeWidth={2}
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2.5}
                       name="Actual Expense"
+                      connectNulls
                       dot={(props: any) => {
                         const { cx, cy, payload, index } = props;
                         if (cx == null || cy == null) return <g key={`dot-${index}`} />;
                         const isAnom = anomalyMonths.has(payload.month);
                         return isAnom ? (
-                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={6} fill="#ef4444" stroke="#fff" strokeWidth={2} />
+                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={6} fill="hsl(var(--destructive))" stroke="#fff" strokeWidth={2} />
                         ) : (
-                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={3} fill="#ef4444" />
+                          <circle key={`dot-${index}`} cx={cx} cy={cy} r={4} fill="hsl(var(--destructive))" stroke="#fff" strokeWidth={1.5} />
                         );
                       }}
+                      activeDot={{ r: 6 }}
                     />
-                    <Line type="monotone" dataKey="actualIncome" stroke="#22c55e" strokeWidth={2} name="Actual Income" dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="forecastExpense" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 4" name="Forecast Expense" dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="forecastIncome" stroke="#22c55e" strokeWidth={2} strokeDasharray="6 4" name="Forecast Income" dot={{ r: 3 }} />
-                  </AreaChart>
+                    <Line
+                      type="monotone"
+                      dataKey="actualIncome"
+                      stroke="hsl(var(--success))"
+                      strokeWidth={2.5}
+                      name="Actual Income"
+                      connectNulls
+                      dot={{ r: 4, fill: "hsl(var(--success))", stroke: "#fff", strokeWidth: 1.5 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    {/* Dashed lines = predicted */}
+                    <Line
+                      type="monotone"
+                      dataKey="forecastExpense"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2}
+                      strokeDasharray="6 5"
+                      name="Forecast Expense"
+                      connectNulls
+                      dot={{ r: 4, fill: "#fff", stroke: "hsl(var(--destructive))", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="forecastIncome"
+                      stroke="hsl(var(--success))"
+                      strokeWidth={2}
+                      strokeDasharray="6 5"
+                      name="Forecast Income"
+                      connectNulls
+                      dot={{ r: 4, fill: "#fff", stroke: "hsl(var(--success))", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
