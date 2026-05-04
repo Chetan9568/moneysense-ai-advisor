@@ -7,6 +7,7 @@ import ForecastSection from "@/components/ForecastSection";
 import AnomalySection from "@/components/AnomalySection";
 import Footer from "@/components/Footer";
 import FileUpload, { ParsedTransaction } from "@/components/FileUpload";
+import UploadCTA from "@/components/UploadCTA";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,14 +29,18 @@ const Index = () => {
     });
   };
 
+  const hasData = transactions.length > 0;
+
   return (
     <div className="min-h-screen">
       <Header />
       <HeroSection onFileUpload={handleFileUpload} />
       <Features />
+      {!hasData && <UploadCTA onFileUpload={handleFileUpload} variant="hero" />}
       <Dashboard transactions={transactions} onFileUpload={handleFileUpload} />
       <ForecastSection transactions={transactions} />
       <AnomalySection transactions={transactions} />
+      {hasData && <UploadCTA onFileUpload={handleFileUpload} variant="compact" hasData />}
       <Footer />
 
       <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
