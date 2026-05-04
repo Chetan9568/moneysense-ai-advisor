@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -6,9 +6,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   Area, ComposedChart, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Brain, IndianRupee, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Brain, IndianRupee, Target, Loader2 } from "lucide-react";
 import { ParsedTransaction } from "@/components/FileUpload";
 import { detectAnomalies } from "@/components/AnomalySection";
+import { lstmForecast } from "@/lib/lstmForecast";
 
 interface Props {
   transactions: ParsedTransaction[];
@@ -78,6 +79,15 @@ function shortMonth(key: string) {
 
 const ForecastSection = ({ transactions }: Props) => {
   const [horizon, setHorizon] = useState<Horizon>(3);
+  const [isTraining, setIsTraining] = useState(false);
+  const [forecastResult, setForecastResult] = useState<{
+    chartData: any[];
+    totals: any;
+    categoryForecasts: any[];
+    insights: string[];
+    alerts: { level: "warning" | "info"; message: string }[];
+    modelUsed: string;
+  } | null>(null);
 
   const monthly = useMemo(() => aggregateMonthly(transactions), [transactions]);
 
@@ -94,118 +104,151 @@ const ForecastSection = ({ transactions }: Props) => {
 
   const hasEnoughData = monthly.length >= 2;
 
-  const { chartData, totals, categoryForecasts, insights, alerts } = useMemo(() => {
+  useEffect(() => {
+    let cancelled = false;
     if (!hasEnoughData) {
-      return { chartData: [], totals: null, categoryForecasts: [], insights: [], alerts: [] } as any;
+      setForecastResult(null);
+      return;
     }
 
-    const expensesSeries = monthly.map((m) => m.expenses);
-    const incomeSeries = monthly.map((m) => m.income);
-    const expReg = linearRegression(expensesSeries);
-    const incReg = linearRegression(incomeSeries);
+    (async () => {
+      setIsTraining(true);
+      try {
+        const expensesSeries = monthly.map((m) => m.expenses);
+        const incomeSeries = monthly.map((m) => m.income);
 
-    // Build chart with history + forecast
-    const lastKey = monthly[monthly.length - 1].key;
-    const history = monthly.map((m, i) => ({
-      month: shortMonth(m.key),
-      actualExpense: Math.round(m.expenses),
-      actualIncome: Math.round(m.income),
-      forecastExpense: null as number | null,
-      lower: null as number | null,
-      upper: null as number | null,
-    }));
+        // Train LSTM models for expenses and income
+        const [expRes, incRes] = await Promise.all([
+          lstmForecast(expensesSeries, horizon),
+          lstmForecast(incomeSeries, horizon),
+        ]);
 
-    const future: any[] = [];
-    for (let i = 1; i <= horizon; i++) {
-      const idx = monthly.length - 1 + i;
-      const predExp = Math.max(0, expReg.intercept + expReg.slope * idx);
-      const predInc = Math.max(0, incReg.intercept + incReg.slope * idx);
-      const band = 1.96 * (expReg.std || predExp * 0.15);
-      future.push({
-        month: shortMonth(nextMonthKey(lastKey, i)),
-        actualExpense: null,
-        actualIncome: null,
-        forecastExpense: Math.round(predExp),
-        forecastIncome: Math.round(predInc),
-        lower: Math.round(Math.max(0, predExp - band)),
-        upper: Math.round(predExp + band),
-      });
-    }
-    const chartData = [...history, ...future];
+        const lastKey = monthly[monthly.length - 1].key;
+        const history = monthly.map((m) => ({
+          month: shortMonth(m.key),
+          actualExpense: Math.round(m.expenses),
+          actualIncome: Math.round(m.income),
+          forecastExpense: null as number | null,
+          forecastIncome: null as number | null,
+          lower: null as number | null,
+          upper: null as number | null,
+        }));
 
-    // Totals
-    const totalForecastExpense = future.reduce((s, f) => s + (f.forecastExpense || 0), 0);
-    const totalForecastIncome = future.reduce((s, f) => s + (f.forecastIncome || 0), 0);
-    const expectedSavings = totalForecastIncome - totalForecastExpense;
-    const nextMonthExpense = future[0]?.forecastExpense || 0;
-    const nextMonthIncome = future[0]?.forecastIncome || 0;
+        const future: any[] = [];
+        for (let i = 0; i < horizon; i++) {
+          const predExp = expRes.predictions[i];
+          const predInc = incRes.predictions[i];
+          const band = 1.96 * (expRes.residualStd || predExp * 0.15);
+          future.push({
+            month: shortMonth(nextMonthKey(lastKey, i + 1)),
+            actualExpense: null,
+            actualIncome: null,
+            forecastExpense: Math.round(predExp),
+            forecastIncome: Math.round(predInc),
+            lower: Math.round(Math.max(0, predExp - band)),
+            upper: Math.round(predExp + band),
+          });
+        }
+        const chartData = [...history, ...future];
 
-    // Category-wise forecasts
-    const allCategories = new Set<string>();
-    monthly.forEach((m) => Object.keys(m.byCategory).forEach((c) => allCategories.add(c)));
+        const totalForecastExpense = future.reduce((s, f) => s + (f.forecastExpense || 0), 0);
+        const totalForecastIncome = future.reduce((s, f) => s + (f.forecastIncome || 0), 0);
+        const expectedSavings = totalForecastIncome - totalForecastExpense;
+        const nextMonthExpense = future[0]?.forecastExpense || 0;
+        const nextMonthIncome = future[0]?.forecastIncome || 0;
 
-    const categoryForecasts = Array.from(allCategories)
-      .map((cat) => {
-        const series = monthly.map((m) => m.byCategory[cat] || 0);
-        const reg = linearRegression(series);
-        const recent = series.slice(-3);
-        const recentAvg = recent.reduce((a, b) => a + b, 0) / Math.max(1, recent.length);
-        const earlier = series.slice(0, Math.max(1, series.length - 3));
-        const earlierAvg = earlier.reduce((a, b) => a + b, 0) / Math.max(1, earlier.length);
-        const nextPred = Math.max(0, reg.intercept + reg.slope * monthly.length);
-        const horizonPred = Math.max(0, reg.intercept + reg.slope * (monthly.length + horizon - 1));
-        const changePct = earlierAvg > 0 ? ((recentAvg - earlierAvg) / earlierAvg) * 100 : 0;
-        let trend: "high-risk" | "stable" | "decreasing" = "stable";
-        if (changePct > 15) trend = "high-risk";
-        else if (changePct < -10) trend = "decreasing";
-        return {
-          category: cat,
-          nextPred,
-          horizonPred,
-          changePct,
-          trend,
-          totalForecast: Array.from({ length: horizon }, (_, i) => Math.max(0, reg.intercept + reg.slope * (monthly.length + i))).reduce((a, b) => a + b, 0),
-        };
-      })
-      .sort((a, b) => b.nextPred - a.nextPred);
+        // Category-wise: train a small LSTM per category (limit to top 8 by total to keep it snappy)
+        const allCategories = new Set<string>();
+        monthly.forEach((m) => Object.keys(m.byCategory).forEach((c) => allCategories.add(c)));
+        const categoryTotals = Array.from(allCategories).map((cat) => ({
+          cat,
+          total: monthly.reduce((s, m) => s + (m.byCategory[cat] || 0), 0),
+        }));
+        const topCats = categoryTotals.sort((a, b) => b.total - a.total).slice(0, 8).map((c) => c.cat);
 
-    // Insights
-    const insights: string[] = [];
-    categoryForecasts.slice(0, 5).forEach((c) => {
-      if (c.trend === "high-risk" && Math.abs(c.changePct) > 5) {
-        insights.push(`Your ${c.category} spending is expected to increase by ${c.changePct.toFixed(0)}% next month.`);
-      } else if (c.trend === "decreasing" && Math.abs(c.changePct) > 5) {
-        insights.push(`Good news — ${c.category} spending is trending down by ${Math.abs(c.changePct).toFixed(0)}%.`);
+        const catResults = await Promise.all(
+          topCats.map(async (cat) => {
+            const series = monthly.map((m) => m.byCategory[cat] || 0);
+            const res = await lstmForecast(series, horizon, { epochs: 60, units: 8 });
+            const recent = series.slice(-3);
+            const recentAvg = recent.reduce((a, b) => a + b, 0) / Math.max(1, recent.length);
+            const earlier = series.slice(0, Math.max(1, series.length - 3));
+            const earlierAvg = earlier.reduce((a, b) => a + b, 0) / Math.max(1, earlier.length);
+            const nextPred = res.predictions[0] || 0;
+            const horizonPred = res.predictions[res.predictions.length - 1] || 0;
+            const changePct = earlierAvg > 0 ? ((recentAvg - earlierAvg) / earlierAvg) * 100 : 0;
+            let trend: "high-risk" | "stable" | "decreasing" = "stable";
+            if (changePct > 15) trend = "high-risk";
+            else if (changePct < -10) trend = "decreasing";
+            return {
+              category: cat,
+              nextPred,
+              horizonPred,
+              changePct,
+              trend,
+              totalForecast: res.predictions.reduce((a, b) => a + b, 0),
+            };
+          })
+        );
+        const categoryForecasts = catResults.sort((a, b) => b.nextPred - a.nextPred);
+
+        const insights: string[] = [];
+        categoryForecasts.slice(0, 5).forEach((c) => {
+          if (c.trend === "high-risk" && Math.abs(c.changePct) > 5) {
+            insights.push(`Your ${c.category} spending is expected to increase by ${c.changePct.toFixed(0)}% next month.`);
+          } else if (c.trend === "decreasing" && Math.abs(c.changePct) > 5) {
+            insights.push(`Good news — ${c.category} spending is trending down by ${Math.abs(c.changePct).toFixed(0)}%.`);
+          }
+        });
+        if (insights.length === 0) {
+          insights.push("Your spending patterns look stable across categories.");
+        }
+        insights.unshift(
+          `Forecast generated using an LSTM neural network trained on ${monthly.length} months of data.`
+        );
+
+        const alerts: { level: "warning" | "info"; message: string }[] = [];
+        if (nextMonthIncome > 0 && nextMonthExpense > nextMonthIncome) {
+          alerts.push({
+            level: "warning",
+            message: `⚠️ You are likely to overspend next month — predicted expenses ₹${formatINR(nextMonthExpense)} exceed predicted income ₹${formatINR(nextMonthIncome)}.`,
+          });
+        }
+        const overspendMonths = future.filter((f) => f.forecastIncome > 0 && f.forecastExpense > f.forecastIncome).length;
+        if (overspendMonths >= 2) {
+          alerts.push({
+            level: "warning",
+            message: `⚠️ Predicted overspending in ${overspendMonths} of the next ${horizon} months.`,
+          });
+        }
+
+        if (!cancelled) {
+          setForecastResult({
+            chartData,
+            totals: { nextMonthExpense, nextMonthIncome, totalForecastExpense, totalForecastIncome, expectedSavings },
+            categoryForecasts,
+            insights,
+            alerts,
+            modelUsed: expRes.modelUsed,
+          });
+        }
+      } catch (e) {
+        console.error("LSTM forecast failed:", e);
+      } finally {
+        if (!cancelled) setIsTraining(false);
       }
-    });
-    if (insights.length === 0) {
-      insights.push("Your spending patterns look stable across categories.");
-    }
+    })();
 
-    // Alerts
-    const alerts: { level: "warning" | "info"; message: string }[] = [];
-    if (nextMonthIncome > 0 && nextMonthExpense > nextMonthIncome) {
-      alerts.push({
-        level: "warning",
-        message: `⚠️ You are likely to overspend next month — predicted expenses ₹${formatINR(nextMonthExpense)} exceed predicted income ₹${formatINR(nextMonthIncome)}.`,
-      });
-    }
-    const overspendMonths = future.filter((f) => f.forecastIncome > 0 && f.forecastExpense > f.forecastIncome).length;
-    if (overspendMonths >= 2) {
-      alerts.push({
-        level: "warning",
-        message: `⚠️ Predicted overspending in ${overspendMonths} of the next ${horizon} months.`,
-      });
-    }
-
-    return {
-      chartData,
-      totals: { nextMonthExpense, nextMonthIncome, totalForecastExpense, totalForecastIncome, expectedSavings },
-      categoryForecasts,
-      insights,
-      alerts,
+    return () => {
+      cancelled = true;
     };
   }, [monthly, horizon, hasEnoughData]);
+
+  const chartData = forecastResult?.chartData ?? [];
+  const totals = forecastResult?.totals;
+  const categoryForecasts = forecastResult?.categoryForecasts ?? [];
+  const insights = forecastResult?.insights ?? [];
+  const alerts = forecastResult?.alerts ?? [];
 
   if (transactions.length === 0) return null;
 
@@ -232,6 +275,18 @@ const ForecastSection = ({ transactions }: Props) => {
               We need at least 2 months of transactions to generate accurate forecasts. Upload more data to unlock predictions.
             </AlertDescription>
           </Alert>
+        ) : !forecastResult || isTraining ? (
+          <Card className="bg-gradient-card border-0 shadow-card">
+            <CardContent className="p-12 flex flex-col items-center justify-center gap-4">
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <div className="text-center">
+                <p className="font-semibold">Training LSTM neural network…</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Learning patterns from your transaction history. This takes a few seconds.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <>
             {/* Horizon selector */}
