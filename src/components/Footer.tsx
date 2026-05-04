@@ -52,7 +52,7 @@ const Footer = () => {
 
         <div className="border-t border-primary-foreground/20 mt-8 pt-8 text-center">
           <p className="text-primary-foreground/60">
-            © 2024 MoneyMind. All rights reserved. Built with AI for better financial decisions.
+            © 2026 MoneyMind. All rights reserved. Built with AI for better financial decisions.
           </p>
         </div>
       </div>
