@@ -8,7 +8,6 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Brain, IndianRupee, Target, Loader2 } from "lucide-react";
 import { ParsedTransaction } from "@/components/FileUpload";
-import { detectAnomalies } from "@/components/AnomalySection";
 import { lstmForecast } from "@/lib/lstmForecast";
 
 interface Props {
@@ -93,10 +92,18 @@ const ForecastSection = ({ transactions }: Props) => {
 
   const anomalyMonths = useMemo(() => {
     const set = new Set<string>();
-    detectAnomalies(transactions).forEach((a) => {
-      const d = new Date(a.txn.date);
-      if (!isNaN(d.getTime())) {
-        set.add(`${shortMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)}`);
+    const expenses = transactions.filter((t) => t.transaction_type === "expense");
+    if (expenses.length < 3) return set;
+    const amounts = expenses.map((t) => t.amount);
+    const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+    const std = Math.sqrt(amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length);
+    expenses.forEach((t) => {
+      const z = std > 0 ? (t.amount - mean) / std : 0;
+      if (z > 2) {
+        const d = new Date(t.date);
+        if (!isNaN(d.getTime())) {
+          set.add(shortMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`));
+        }
       }
     });
     return set;
